@@ -1,3 +1,9 @@
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+
+const SALT_LENGTH = 10;
+const ONE_YEAR = 1000 * 60 * 60 * 24 * 365;
+
 const Mutations = {
   async createItem(parent, args, ctx, info) {
     // TODO: Check if they are logged in
@@ -9,13 +15,10 @@ const Mutations = {
     return item;
   },
   updateItem(parent, args, ctx, info) {
-    // first take a copy of the updates
     const updates = { ...args };
-    // remove ID from updates
-    delete updates.id;
-    // run the update method
+    const { id, ...updatesWithoutId } = updates;
     return ctx.db.mutation.updateItem({
-      data: updates,
+      data: updatesWithoutId,
       where: {
         id: args.id,
       },
@@ -29,6 +32,46 @@ const Mutations = {
     );
     return ctx.db.mutation.deleteItem({ where }, info);
   },
+  async signup(parent, args, ctx, info) {
+    const emailToLowerCase = args.email.toLowerCase();
+    const password = await bcrypt.hash(args.password, SALT_LENGTH);
+    const user = await ctx.db.mutation.createUser({
+      data: {
+        ...args,
+        email: emailToLowerCase,
+        password,
+        permissions: { set: ['USER'] },
+
+
+      }
+    }, info);
+    const token = jwt.sign({ userId: user.id }, process.env.APP_SECRET);
+    ctx.response.cookie('token', token, {
+      httpOnly: true,
+      maxAge: ONE_YEAR,
+    });
+    return user;
+  },
+  async signin(parent, { email, password }, ctx, info) {
+    const user = await ctx.db.query.user({ where: { email }});
+    if (!user) {
+      throw new Error(`No such user found for email: ${email}`);
+    }
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    if (!isPasswordValid) {
+      throw new Error('Invalid Password');
+    }
+    const token = jwt.sign({ userId: user.id }, process.env.APP_SECRET);
+    ctx.response.cookie('token', token, {
+      httpOnly: true,
+      maxAge: ONE_YEAR,
+    });
+    return user;
+  },
+  signout(parent, args, ctx, info) {
+    ctx.response.clearCookie('token');
+    return { message: 'Goodbye!' };
+  }
 };
 
 module.exports = Mutations;
