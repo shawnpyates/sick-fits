@@ -11,9 +11,18 @@ const ONE_YEAR = ONE_HOUR * 24 * 365;
 
 const Mutations = {
   async createItem(parent, args, ctx, info) {
-    // TODO: Check if they are logged in
+    if (!ctx.request.userId) {
+      throw new Error('You must be logged in to do that.');
+    }
     const item = await ctx.db.mutation.createItem(
-      { data: { ...args } },
+      { 
+        data: {
+          ...args,
+          user: {
+            connect: { id: ctx.request.userId },
+          } 
+        } 
+      },
       info,
     );
 
