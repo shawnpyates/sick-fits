@@ -4,6 +4,7 @@ const { randomBytes } = require('crypto');
 const { promisify } = require('util');
 
 const { transport, makeANiceEmail } = require('../mail');
+const { hasPermission } = require('../utils');
 
 const SALT_LENGTH = 10;
 const ONE_HOUR = 1000 * 60 * 60;
@@ -11,9 +12,18 @@ const ONE_YEAR = ONE_HOUR * 24 * 365;
 
 const Mutations = {
   async createItem(parent, args, ctx, info) {
-    // TODO: Check if they are logged in
+    if (!ctx.request.userId) {
+      throw new Error('You must be logged in to do that.');
+    }
     const item = await ctx.db.mutation.createItem(
-      { data: { ...args } },
+      { 
+        data: {
+          ...args,
+          user: {
+            connect: { id: ctx.request.userId },
+          } 
+        } 
+      },
       info,
     );
 
@@ -33,8 +43,15 @@ const Mutations = {
     const where = { id: args.id };
     const item = await ctx.db.query.item(
       { where }, 
-      `{ id title }`
+      `{ id title user {id}}`
     );
+    const ownsItem = item.user.id == ctx.request.userId;
+    const hasPermissions = ctx.request.user.permissions.some(permission => (
+      ['ADMIN', 'ITEMDELETE'].includes(permission)
+    ));
+    if (!ownsItem && !hasPermissions) {
+      throw new Error('You don\'t have permission to delete items that aren\'t yours.');
+    } 
     return ctx.db.mutation.deleteItem({ where }, info);
   },
   async signup(parent, args, ctx, info) {
@@ -133,6 +150,30 @@ const Mutations = {
       maxAge: ONE_YEAR,
     });
     return updatedUser;
+  },
+  async updatePermissions(parent, args, ctx, info) {
+    if (!ctx.request.userId) {
+      throw new Error('You must be logged in!');
+    }
+    const currentUser = await ctx.db.query.user(
+      {
+        where: {
+          id: ctx.request.userId,
+        },
+      },
+      info
+    );
+    hasPermission(currentUser, ['ADMIN', 'PERMISSIONUPDATE']);
+    return ctx.db.mutation.updateUser({
+      data: {
+        permissions: {
+          set: args.permissions,
+        }
+      },
+      where: {
+        id: args.userId,
+      }
+    }, info);
   }
 };
 

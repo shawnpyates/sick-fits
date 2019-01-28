@@ -57,7 +57,7 @@ class Signin extends Component {
                   />
                 </label>
                 <label htmlFor="password">
-                  Text
+                  Password
                   <input 
                     type="password"
                     name="password"
