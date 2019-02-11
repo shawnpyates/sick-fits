@@ -1,6 +1,6 @@
 #endpoint: ${env:PRIMSA_ENDPOINT}
 endpoint: https://us1.prisma.sh/shawn-yates/sick-fits/dev
-datamodel: datamodel.prisma
+datamodel: datamodel.graphql
 # secret: ${env:PRIMSA_SECRET}
 hooks:
   post-deploy:
